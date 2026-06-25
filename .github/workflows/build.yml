@@ -1,0 +1,46 @@
+name: Build 64-Bit OS ISO
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Build Tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y nasm gcc-multilib binutils grub-common xorriso mtools
+
+    - name: Compile Assembly Bootloader
+      run: |
+        nasm -f elf64 boot.asm -o boot.o
+
+    - name: Compile C Kernel
+      run: |
+        gcc -m64 -c kernel.c -o kernel.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
+
+    - name: Link Files into Kernel Binary
+      run: |
+        ld -m elf_x86_64 -T linker.ld -o my-kernel.bin boot.o kernel.o
+
+    - name: Set up ISO Structure
+      run: |
+        mkdir -p iso_root/boot/grub
+        cp my-kernel.bin iso_root/boot/
+        echo -e "set timeout=0\nset default=0\n\nmenuentry 'My 64-Bit OS' {\n  multiboot2 /boot/my-kernel.bin\n  boot\n}" > iso_root/boot/grub/grub.cfg
+
+    - name: Generate ISO Image
+      run: |
+        grub-mkrescue -o my-os.iso iso_root
+
+    - name: Upload Finished ISO
+      uses: actions/upload-artifact@v4
+      with:
+        name: my-os-iso
+        path: my-os.iso
